@@ -23,11 +23,17 @@ root.geometry(f"800x600+{int(width / 2) - 400}+{int(height / 2) - 320}")
 canvas = FigureCanvasTkAgg(figure, master=root)
 canvas.get_tk_widget().pack(pady=10)
 
-def update_vote_stats(groups: int, filtered_votes: pd.DataFrame) -> str:
-    vote_count = len(filtered_votes) if not filtered_votes.empty else 0
-    average = vote_count / groups if groups != 0 else 0
+def update_vote_stats(groups: int, vote_counts: pd.DataFrame) -> str:
+    if vote_counts.empty:
+        return label_vote_stats.config(text="Total: 0\nAverage: 0\nMax: -\nMin: -")
 
-    label_vote_stats.config(text=f"Total: {vote_count}\nAverage: {average:.2f}")
+    vote_count = vote_counts.sum()
+    average = vote_counts.mean()
+
+    max_group, max_val = vote_counts[vote_counts == vote_counts.max()].reset_index().iloc[0]
+    min_group, min_val = vote_counts[vote_counts == vote_counts.min()].reset_index().iloc[0]
+
+    label_vote_stats.config(text=f"Total: {vote_count}\nAverage: {average:.2f}\nMax: {max_group} - {max_val}\nMin: {min_group} - {min_val}")
 
 def ideal_fig_width(data_points: int):
     # max of 6.5 when displaying a max of 24 hour columns
@@ -56,8 +62,8 @@ def render(bars=None, xlabel=""):
 
     canvas.draw()
 
-def get_range(time_unit: str, selection: pd.DataFrame):
-    values = selection[time_unit].drop_duplicates()
+def get_range(unit: str, selection: pd.DataFrame):
+    values = selection[unit].drop_duplicates()
     return range(values.min(), values.max() + 1)
 
 def count_votes(event=None):
@@ -71,9 +77,10 @@ def count_votes(event=None):
     # TODO Add option to toggle displaying gaps in the each selection column's range
     tick_label_getters = [
         get_range,
-        lambda time_unit, selection: [calendar.month_name[i][0:3] for i in get_range("month", selection)],
+        lambda unit, selection: [calendar.month_name[i][0:3] for i in get_range("month", selection)],
         get_range,
-        lambda time_unit, selection: [time.strftime("%I\n%p") for time in selection.drop_duplicates("hour").sort_values("hour")["datetime"]]
+        lambda unit, selection: [time.strftime("%I\n%p") for time in selection.drop_duplicates("hour").sort_values("hour")["datetime"]],
+        lambda unit, selection: ["Anons" if voter == "" else f"{'\n'*(i%2)}{voter}" for i, voter in enumerate(selection["voter"].drop_duplicates().sort_values().values)]
     ]
 
     # used for narrowing down the voting data for depending on time selections
@@ -93,7 +100,7 @@ def count_votes(event=None):
         update_vote_stats(0, selection)
         return render(None, group_by)
 
-    x_tick_labels = tick_label_getters[["year", "month", "day", "hour"].index(group_by)](group_by, selection)
+    x_tick_labels = tick_label_getters[["year", "month", "day", "hour", "voter"].index(group_by)](group_by, selection)
 
     vote_counts = selection.groupby(group_by).size()
 
@@ -118,11 +125,21 @@ def count_votes(event=None):
         graph.set_xticks(x_ticks, x_tick_labels)
         bars = graph.bar(x_ticks, vote_counts.sort_index().values)
 
+    elif group_by == "voter":
+        vote_counts.sort_index(inplace=True)
+
+        if "" in vote_counts.index:
+            vote_counts.rename({"": "Anons"}, inplace=True)
+
+        x_ticks = range(len(vote_counts))
+        graph.set_xticks(x_ticks, x_tick_labels)
+        bars = graph.bar(x_ticks, vote_counts.values)
+
     else:
         graph.set_xticks(vote_counts.index, x_tick_labels)
         bars = graph.bar(vote_counts.index, vote_counts.values)
 
-    update_vote_stats(len(vote_counts), selection)
+    update_vote_stats(len(vote_counts), vote_counts)
     render(bars, group_by)
 
     # maybe update show by combo to have only time units where all is seleted
@@ -142,10 +159,11 @@ var_day = tk.StringVar(value="All", name="day")
 var_use_weekdays = tk.BooleanVar(value=False)
 var_show_by = tk.StringVar(value="Year")
 
+show_by = ["Year", "Month", "Day", "Hour", "Voter"] if "voter" in df.columns else ["Year", "Month", "Day", "Hour"]
 combo_year = ttk.Combobox(frame_time_options, textvariable=var_year, values=["All", *available_years], name="year", state="readonly")
 combo_month = ttk.Combobox(frame_time_options, textvariable=var_month, values=["All", *available_month_names], name="month", state="readonly")
 combo_day = ttk.Combobox(frame_time_options, textvariable=var_day, values=["All", *available_days], name="day", state="readonly")
-combo_show_by = ttk.Combobox(frame_time_options, textvariable=var_show_by, values=["Year", "Month", "Day", "Hour"], state="readonly")
+combo_show_by = ttk.Combobox(frame_time_options, textvariable=var_show_by, values=show_by, state="readonly")
 
 label_year = tk.Label(frame_time_options, text="Year : ")
 label_month = tk.Label(frame_time_options, text="Month : ")
