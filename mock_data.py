@@ -9,10 +9,10 @@ voter_probs = {
 potential_voters = np.array(list(voter_probs.keys()))
 probs = np.array(list(voter_probs.values()))
 
-for file_name in os.listdir("raw data"):
+for file_name in os.listdir("sample_data"):
     data = { "timestamp": [] }
 
-    with open(f"raw data/{file_name}", "r") as file:
+    with open(f"sample_data/{file_name}", "r") as file:
         reader = csv.reader(file)
         next(reader)
         data["timestamp"].extend(row[0] for row in reader)
@@ -24,4 +24,4 @@ for file_name in os.listdir("raw data"):
     voter_appearances = potential_voters[rand_vals < probs]
 
     df["voter"] = pd.Series(voter_appearances)
-    df.to_csv(f"test data/{file_name}", index=False)
+    df.to_csv(f"mock_data/{file_name}", index=False)

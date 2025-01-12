@@ -1,3 +1,4 @@
 __pycache__
-test_data.py
-mock data
+mock_data
+sample_data
+.env

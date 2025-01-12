@@ -20,7 +20,7 @@ def _init_df(data_folder):
     temp_data = {k: pd.Series(v) for k, v in temp_data.items()}
     return pd.DataFrame(temp_data)
 
-df = _init_df("test data")
+df = _init_df("sample_data")
 
 df["datetime"] = pd.to_datetime(df["datetime"])
 
