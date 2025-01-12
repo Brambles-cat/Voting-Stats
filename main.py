@@ -23,11 +23,17 @@ root.geometry(f"800x600+{int(width / 2) - 400}+{int(height / 2) - 320}")
 canvas = FigureCanvasTkAgg(figure, master=root)
 canvas.get_tk_widget().pack(pady=10)
 
+def update_vote_stats(groups: int, filtered_votes: pd.DataFrame) -> str:
+    vote_count = len(filtered_votes) if not filtered_votes.empty else 0
+    average = vote_count / groups if groups != 0 else 0
+
+    label_vote_stats.config(text=f"Total: {vote_count}\nAverage: {average:.2f}")
+
 def ideal_fig_width(data_points: int):
     # max of 6.5 when displaying a max of 24 hour columns
     return 2.5 + 4 * (data_points - 1) / 23
 
-def render(bars=None, xlabel="", vote_sum=None):
+def render(bars=None, xlabel=""):
     # TODO filter selectable time options in count_votes() to prevent display of no data
     
     # Resizing the figure for when there are so many columns that the x labels overlap
@@ -50,9 +56,6 @@ def render(bars=None, xlabel="", vote_sum=None):
 
     canvas.draw()
 
-    if vote_sum:
-        label_text.config(text=f"Total: {vote_sum}")
-
 def get_range(time_unit: str, selection: pd.DataFrame):
     values = selection[time_unit].drop_duplicates()
     return range(values.min(), values.max() + 1)
@@ -65,6 +68,7 @@ def count_votes(event=None):
         "month": calendar.month_name.index(var_month.get()) if var_month.get() != "All" else "All",
         "day": int(var_day.get()) if var_day.get() != "All" else "All",
     }
+    # TODO Add option to toggle displaying gaps in the each selection column's range
     tick_label_getters = [
         get_range,
         lambda time_unit, selection: [calendar.month_name[i][0:3] for i in get_range("month", selection)],
@@ -86,31 +90,48 @@ def count_votes(event=None):
 
     if selection.empty:
         graph.text(0.5, 0.5, "No Data D:", ha="center", va="bottom")
-        return render(None, group_by, len(selection))
+        update_vote_stats(0, selection)
+        return render(None, group_by)
 
     x_tick_labels = tick_label_getters[["year", "month", "day", "hour"].index(group_by)](group_by, selection)
 
     vote_counts = selection.groupby(group_by).size()
 
+    # TODO fix ugliness somehow
     if group_by == "day":
         graph.set_xticks(x_tick_labels, x_tick_labels)
         bars = graph.bar(vote_counts.index, vote_counts.values)
+
     elif group_by == "hour":
-        graph.set_xticks(range(len(vote_counts)), x_tick_labels)
-        bars = graph.bar(range(len(vote_counts)), vote_counts.values)
+        x_ticks = range(len(vote_counts))
+        graph.set_xticks(x_ticks, x_tick_labels)
+        bars = graph.bar(x_ticks, vote_counts.values)
+
+    elif group_by == "month":
+        x_ticks = vote_counts.index
+        x_ticks = range(x_ticks.min(), x_ticks.max() + 1)
+        missing_indices = list(set(x_ticks) - set(vote_counts.index))
+
+        for i in missing_indices:
+            vote_counts.loc[i] = 0
+
+        graph.set_xticks(x_ticks, x_tick_labels)
+        bars = graph.bar(x_ticks, vote_counts.sort_index().values)
+
     else:
         graph.set_xticks(vote_counts.index, x_tick_labels)
         bars = graph.bar(vote_counts.index, vote_counts.values)
 
-    render(bars, group_by, len(selection))
+    update_vote_stats(len(vote_counts), selection)
+    render(bars, group_by)
 
     # maybe update show by combo to have only time units where all is seleted
     # Although this would mostly prevent displaying singular columns if that's what's
     # wanted for some reason
     # combo_show_by.config(values=[*[v._name for v in [var_year, var_month, var_day] if v.get() == "All"], "Hour"])
 
-label_text = tk.Label(root, text="Total: -")
-label_text.pack(pady=(0, 20))
+label_vote_stats = tk.Label(root, text="Total: -\nAverage: -")
+label_vote_stats.pack(pady=(0, 20))
 
 frame_time_options = tk.Frame(root)
 frame_time_options.pack()
