@@ -1,6 +1,9 @@
-import os, pandas as pd, csv
+import os, pandas as pd, csv, dotenv
 
 #pd.set_option('display.max_rows', 100)
+
+dotenv.load_dotenv()
+data_folder = os.getenv("data_folder")
 
 def _init_df(data_folder):
     temp_data = {"datetime": [], "voter": []}
@@ -17,10 +20,13 @@ def _init_df(data_folder):
 
             temp_data["datetime"].extend([row[0] for row in csv_rows])
 
+    if len(temp_data["voter"]) == 0:
+        del temp_data["voter"]
+
     temp_data = {k: pd.Series(v) for k, v in temp_data.items()}
     return pd.DataFrame(temp_data)
 
-df = _init_df("sample_data")
+df = _init_df(data_folder)
 
 df["datetime"] = pd.to_datetime(df["datetime"])
 
