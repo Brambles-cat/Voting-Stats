@@ -15,8 +15,8 @@ def _init_df(data_folder):
             headers = next(csv_reader) 
             csv_rows = [row for row in csv_reader]
 
-            if headers[-1] == "voter":
-                temp_data["voter"].extend([row[-1] for row in csv_rows])
+            #if headers[-1] == "voter":
+            temp_data["voter"].extend([row[-1] for row in csv_rows])
 
             temp_data["datetime"].extend([row[0] for row in csv_rows])
 
