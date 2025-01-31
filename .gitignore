@@ -1,4 +1,5 @@
 __pycache__
 mock_data
 sample_data
+outputs/*.csv
 .env
