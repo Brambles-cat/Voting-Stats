@@ -29,5 +29,5 @@ for file_name in os.listdir(data_folder):
 
     voter_appearances = potential_voters[rand_vals < probs]
 
-    df["contact"] = pd.Series(voter_appearances)
+    df["voter"] = pd.Series(voter_appearances)
     df.to_csv(f"mock_data/{file_name}", index=False)
