@@ -59,7 +59,7 @@ def compose():
     if not options["Include Contacts"]["var"].get():
         df.drop(columns="Contact", inplace=True)
 
-    df.to_csv("outputs/composed_data.csv")
+    df.to_csv("outputs/composed_data.csv", index=False)
 
 
 def toggle_contacts():
