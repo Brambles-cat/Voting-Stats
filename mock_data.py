@@ -16,14 +16,15 @@ potential_voters = np.array(list(voter_probs.keys()))
 probs = np.array(list(voter_probs.values()))
 
 for file_name in os.listdir(data_folder):
-    data = { "timestamp": [] }
+    data = []
 
     with open(f"{data_folder}/{file_name}", "r") as file:
         reader = csv.reader(file)
         next(reader)
-        data["timestamp"].extend(row[0] for row in reader)
+        for row in reader:
+            data.append(row[:11])
 
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(data, columns=["Timestamp"] + [f"Vote {i}" for i in range(1, 11)])
 
     rand_vals = np.random.random(size=len(voter_probs))
 

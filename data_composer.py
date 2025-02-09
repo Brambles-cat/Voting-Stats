@@ -1,9 +1,11 @@
 """File for creating a single csv file composed of all given voting data and video titles"""
 
-import pandas as pd, tkinter as tk, numpy as np, os, csv
+import pandas as pd, tkinter as tk, numpy as np
 from tkinter import ttk, filedialog
 from modules.typing import Option
+from modules.external import fetch, save_to_cache
 from tktooltip import ToolTip
+import os, csv
 
 
 def choose_input_folder():
@@ -19,23 +21,31 @@ def compose():
     for file_name in os.listdir(source_dir):
         with open(f"{source_dir}/{file_name}", encoding="utf8") as file:
             reader = csv.reader(file)
-            next(reader)
+            header = next(reader)
+
             file_data = [row for row in reader]
             data.extend(file_data)
+            
+            split = [""] * len(header)
+            data.append(split)
 
     df = pd.DataFrame(data=data)
 
-    if len(df.columns) == 2: # mock data
-        df.columns = ["Timestamp", "Contact"]
-    elif len(df.columns) == 11: # contacts removed
-        df.columns = ["Timestamp"] + ["Vote"] * 10
+    if len(df.columns) == 11: # contacts removed
+        df.columns = ["Timestamp"] + [f"Vote {i}" for i in range(1, 11)]
         df["Contact"] = ""
     elif len(df.columns) == 12: # with contacts
-        df.columns = ["Timestamp"] + ["Vote"] * 10 + ["Contact"]
+        df.columns = ["Timestamp"] + [f"Vote {i}" for i in range(1, 11)] + ["Contact"]
+    else:
+        raise Exception("Unexpected column count in dataset")
+    
+    df["Range #"] = (df["Timestamp"] == "").cumsum()
 
     anonymize_contacts = options["Anonymize Contacts"]["var"].get()
-    count_times_voted = options["Count Times Voted"]["var"].get()
     include_titles = options["Include Titles"]["var"].get()
+    include_dates = options["Include Upload Dates"]["var"].get()
+    include_uploaders = options["Include Uploaders"]["var"].get()
+    include_rel_upload_time = options["Include Relative Upload Time"]["var"].get()
 
     contacts = df["Contact"][df["Contact"].astype(bool)].unique()
     contact_mappings = [[f"#{voter_num}", contact] for voter_num, contact in enumerate(contacts, 1)]
@@ -45,22 +55,39 @@ def compose():
         df.replace({"Contact": {mapping[1]: mapping[0] for mapping in contact_mappings}}, inplace=True)
         contacts = [mapping[0] for mapping in contact_mappings]
 
-    if count_times_voted:
-        voter_metrics = pd.DataFrame(data={"Voter": contacts})
-        voter_metrics["# Times Voted"] = voter_metrics["Voter"].map(df.groupby("Contact").size().drop(""))
+    if include_titles:
+        for i in range(1, 11):
+            df[f"Title {i}"] = df[f"Vote {i}"].apply(lambda url: fetch(url).get("title", url))
+            save_to_cache()
 
-        voter_metrics.to_csv("outputs/voter_metrics.csv", index=False)
+    if include_dates:
+        for i in range(1, 11):
+            df[f"Date {i}"] = df[f"Vote {i}"].apply(lambda url: fetch(url).get("upload_date", ""))
+            save_to_cache()
+    
+    if include_uploaders:
+        for i in range(1, 11):
+            df[f"Uploader {i}"] = df[f"Vote {i}"].apply(lambda url: fetch(url).get("uploader", ""))
+            save_to_cache()
+    
+    if include_rel_upload_time:
+        for i in range(1, 11):
+            df[f"Rel Time {i}"] = df[f"Vote {i}"].apply(lambda url: fetch(url).get("upload_date", ""))
+            save_to_cache()
 
-    if not include_titles and "Vote" in df.columns:
-        df.drop(columns="Vote", inplace=True)
-    else:
-        pass # TODO
+        df[[f"Rel Time {i}" for i in range(1, 11)]] = df.groupby("Range #", group_keys=False).apply(rank_dates)
 
     if not options["Include Contacts"]["var"].get():
         df.drop(columns="Contact", inplace=True)
 
+    df.drop(columns=[f"Vote {i}" for i in range(1, 11)], inplace=True)
     df.to_csv("outputs/composed_data.csv", index=False)
 
+def rank_dates(df: pd.DataFrame):
+    columns =[f"Rel Time {i}" for i in range(1, 11)]
+    temp: pd.DataFrame = df[columns].replace("", pd.NaT)
+    temp[columns] = temp[columns].rank(method="min")
+    return temp
 
 def toggle_contacts():
     if options["Include Contacts"]["var"].get():
@@ -93,9 +120,6 @@ var_inclide_titles = tk.BooleanVar()
 var_include_num_times_voted = tk.BooleanVar()
 
 options: dict[str, Option] = {
-    "Count Times Voted": {
-        "tooltip": "Create a csv file with the number of times a voter had voted for the showcase"
-    },
     "Include Contacts": {
         "tooltip": "Add a column voter contact info"
     },
@@ -103,8 +127,17 @@ options: dict[str, Option] = {
         "tooltip": "Replace all contact information with a short id, and generate a separate csv mapping ids to contacts"
     },
     "Include Titles": {
-        "tooltip": "Keep columns where video urls would be, except use their titles instead"
+        "tooltip": "Verbatim"
     },
+    "Include Upload Dates": {
+        "tooltip": "Verbatim"
+    },
+    "Include Uploaders": {
+        "tooltip": "Verbatim"
+    },
+    "Include Relative Upload Time": {
+        "tooltip": "Include order number of a video's release relative to all others in each month. 1 = Earlist video from month's data"
+    }
 }
 
 for option, d in options.items():
@@ -113,7 +146,6 @@ for option, d in options.items():
     ToolTip(d["checkbox"], msg=d["tooltip"], delay=0.1)
     d["checkbox"].pack(anchor="w")
 
-options["Include Titles"]["checkbox"].config(state="disabled")
 options["Anonymize Contacts"]["checkbox"].config(state="disabled")
 options["Include Contacts"]["checkbox"].config(command=toggle_contacts)
 

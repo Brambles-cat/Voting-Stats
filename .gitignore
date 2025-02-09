@@ -3,3 +3,4 @@ mock_data
 sample_data
 outputs/*.csv
 .env
+cache.json
